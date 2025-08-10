@@ -106,3 +106,26 @@ This stores:
     cashout ticket list
         -p, --project       Project key (prompted if omitted)
         --all               Include Done/
+
+
+# Assign by email (auto-resolves to accountId or username)
+cashout ticket assign PP-123 --email svetoslav.nenov@weareplanet.com
+
+# If multiple matches, pick the first automatically
+cashout ticket assign PP-123 --email "svetoslav" --first
+
+# Explicit (still supported)
+cashout ticket assign PP-123 --account-id 557058:abcd-1234-...
+cashout ticket assign PP-123 --user svetoslav.nenov
+
+# Assign by account ID (Cloud/DC, most reliable)
+cashout ticket assign PP-123 --account-id 557058:abcd-1234-5678-...
+
+# Assign by username (Server/DC)
+cashout ticket assign PP-123 --user svetoslav.nenov
+
+# Assign by email (auto-resolves to accountId or username)
+cashout ticket assign PP-123 --email svetoslav.nenov@weareplanet.com
+
+# Assign by email when multiple matches exist
+cashout ticket assign PP-123 --email "svetoslav" --first

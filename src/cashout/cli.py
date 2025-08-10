@@ -211,25 +211,74 @@ def ticket_list(project, all_statuses, mine, assignee, jql_extra, limit, as_json
 
     click.secho(f"\nShowing {len(issues)} of ~{total} matching issues.", dim=True)
 
+
 @ticket.command("assign")
 @click.argument("issue_key", required=True)
-@click.option("--user", help="Jira username (Server/DC). Mutually exclusive with --account-id.")
+@click.option("--email", help="User email (resolve to accountId/username automatically).")
+@click.option("--user", help="Jira username (Server/DC). Mutually exclusive with --account-id and --email.")
 @click.option("--account-id", help="Jira accountId (Cloud/DC). Takes precedence over --user if both supplied.")
+@click.option("--first", is_flag=True, help="When --email matches multiple users, pick the first automatically.")
 @click.option("--base-url", help="Override saved base URL.")
 @click.option("--token", help="Override stored Bearer token.")
-def ticket_assign(issue_key, user, account_id, base_url, token):
+def ticket_assign(issue_key, email, user, account_id, first, base_url, token):
     """
     Assign ISSUE-KEY to a user.
+
+    Priority order:
+      --account-id > --user > --email (resolved).
     """
-    if not account_id and not user:
-        click.secho("Provide --account-id (preferred) or --user.", fg="red", err=True)
+    resolved_account_id = account_id
+    resolved_user = user
+
+    if email and (account_id or user):
+        click.secho("Use only one of --email / --user / --account-id.", fg="red", err=True)
+        raise SystemExit(1)
+
+    if email:
+        try:
+            candidates = find_user(email, base_url_override=base_url, token_override=token)
+        except Exception as e:
+            click.secho(f"User lookup failed: {e}", fg="red", err=True)
+            raise SystemExit(1)
+
+        if not candidates:
+            click.secho(f"No users found for '{email}'.", fg="yellow")
+            raise SystemExit(1)
+
+        # Prefer exact email match when present
+        exact = [u for u in candidates if (u.get("emailAddress") or "").lower() == email.lower()]
+        if len(exact) == 1:
+            resolved_account_id = exact[0].get("accountId")
+            resolved_user = exact[0].get("name")
+        elif len(exact) > 1 and not first:
+            click.secho(f"Multiple exact matches for {email}. Specify --account-id or pass --first.", fg="yellow")
+            header = f"{'ACCOUNT ID':<40}  {'USERNAME':<20}  {'DISPLAY NAME':<30}  EMAIL"
+            click.secho(header, fg="cyan"); click.secho("-" * len(header), dim=True)
+            for u in exact:
+                click.echo(f"{(u.get('accountId') or ''):<40}  {(u.get('name') or ''):<20}  {(u.get('displayName') or ''):<30}  {(u.get('emailAddress') or '')}")
+            raise SystemExit(1)
+        else:
+            if len(candidates) == 1 or first:
+                chosen = candidates[0]
+                resolved_account_id = chosen.get("accountId")
+                resolved_user = chosen.get("name")
+            else:
+                click.secho(f"Multiple users matched '{email}'. Refine query or pass --first.", fg="yellow")
+                header = f"{'ACCOUNT ID':<40}  {'USERNAME':<20}  {'DISPLAY NAME':<30}  EMAIL"
+                click.secho(header, fg="cyan"); click.secho("-" * len(header), dim=True)
+                for u in candidates:
+                    click.echo(f"{(u.get('accountId') or ''):<40}  {(u.get('name') or ''):<20}  {(u.get('displayName') or ''):<30}  {(u.get('emailAddress') or '')}")
+                raise SystemExit(1)
+
+    if not resolved_account_id and not resolved_user:
+        click.secho("Provide one of: --email, --account-id, or --user.", fg="red", err=True)
         raise SystemExit(1)
 
     try:
         assign_issue(
             issue_key=issue_key,
-            user=None if account_id else user,
-            account_id=account_id,
+            user=None if resolved_account_id else resolved_user,
+            account_id=resolved_account_id,
             base_url_override=base_url,
             token_override=token,
         )
@@ -237,7 +286,7 @@ def ticket_assign(issue_key, user, account_id, base_url, token):
         click.secho(f"Error: {e}", fg="red", err=True)
         raise SystemExit(1)
 
-    who = account_id or user
+    who = resolved_account_id or resolved_user or email
     click.secho(f"Assigned {issue_key} → {who}", fg="green")
 
 
@@ -260,6 +309,7 @@ def ticket_unassign(issue_key, base_url, token):
         raise SystemExit(1)
 
     click.secho(f"Unassigned {issue_key}", fg="green")
+
 
 @ticket.command("whois")
 @click.argument("query", required=True)
@@ -290,6 +340,7 @@ def ticket_whois(query, base_url, token):
         display_name = u.get("displayName", "") or ""
         email = u.get("emailAddress", "") or ""
         click.echo(f"{account_id:<40}  {username:<20}  {display_name:<30}  {email}")
+
 
 if __name__ == "__main__":
     cli()
