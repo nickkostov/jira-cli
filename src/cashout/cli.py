@@ -8,8 +8,16 @@ from datetime import datetime
 import click
 
 from .auth import auth as auth_group, get_base_url
-from .issue import create_issue_simple, add_comment, search_issues, assign_issue, unassign_issue, find_user
+from .issue import (
+    create_issue_simple,
+    add_comment,
+    search_issues,
+    assign_issue,
+    unassign_issue,
+    find_user,
+)
 from .open import open_issue
+
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli():
@@ -122,21 +130,34 @@ def ticket_comment(issue_key, comment_body, base_url, token):
 @click.option("--all", "all_statuses", is_flag=True, help="Include Done/Closed issues (default: open only).")
 @click.option("--mine", is_flag=True, help="Only issues assigned to you.")
 @click.option("--assignee", help='Filter by assignee (username/email). Ignored if --mine is set.')
+@click.option("--unassigned", is_flag=True, help="Only issues with no assignee.")
 @click.option("--jql", "jql_extra", help="Extra JQL to AND onto the base query.")
 @click.option("-n", "--limit", type=int, default=50, show_default=True, help="Max issues to return.")
 @click.option("--json", "as_json", is_flag=True, help="Output raw JSON.")
 @click.option("--base-url", help="Override saved base URL.")
 @click.option("--token", help="Override stored Bearer token.")
-def ticket_list(project, all_statuses, mine, assignee, jql_extra, limit, as_json, base_url, token):
+def ticket_list(project, all_statuses, mine, assignee, unassigned, jql_extra, limit, as_json, base_url, token):
     """
     List tickets in a project (defaults to open only).
     """
+
+    # Mutually exclusive: --mine / --assignee / --unassigned
+    if sum(bool(x) for x in (mine, bool(assignee), unassigned)) > 1:
+        click.secho("Use only one of: --mine, --assignee, or --unassigned.", fg="red", err=True)
+        raise SystemExit(1)
+
+    # Build final JQL with optional unassigned clause
+    final_jql = jql_extra or ""
+    if unassigned:
+        clause = "assignee is EMPTY"
+        final_jql = f"{final_jql} AND {clause}" if final_jql else clause
+
     try:
         data = search_issues(
             project_key=project,
-            jql_extra=jql_extra,
+            jql_extra=final_jql,
             only_open=not all_statuses,
-            assignee=None if mine else assignee,
+            assignee=None if (mine or unassigned) else assignee,
             mine=mine,
             limit=limit,
             base_url_override=base_url,
@@ -341,6 +362,8 @@ def ticket_whois(query, base_url, token):
         display_name = u.get("displayName", "") or ""
         email = u.get("emailAddress", "") or ""
         click.echo(f"{account_id:<40}  {username:<20}  {display_name:<30}  {email}")
+
+
 @ticket.command("open")
 @click.argument("issue_key", required=True)
 @click.option("--no-validate", is_flag=True, help="Do not call Jira to validate the issue exists.")
