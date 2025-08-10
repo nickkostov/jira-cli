@@ -8,7 +8,7 @@ from datetime import datetime
 import click
 
 from .auth import auth as auth_group, get_base_url
-from .issue import create_issue_simple, add_comment, search_issues, assign_issue, unassign_issue
+from .issue import create_issue_simple, add_comment, search_issues, assign_issue, unassign_issue, find_user
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli():
@@ -261,6 +261,35 @@ def ticket_unassign(issue_key, base_url, token):
 
     click.secho(f"Unassigned {issue_key}", fg="green")
 
+@ticket.command("whois")
+@click.argument("query", required=True)
+@click.option("--base-url", help="Override saved base URL.")
+@click.option("--token", help="Override stored Bearer token.")
+def ticket_whois(query, base_url, token):
+    """
+    Search Jira users by email, display name, or username.
+    Shows accountId (Cloud) and username (Server/DC).
+    """
+    try:
+        users = find_user(query, base_url_override=base_url, token_override=token)
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    if not users:
+        click.secho("No matching users found.", fg="yellow")
+        return
+
+    header = f"{'ACCOUNT ID':<40}  {'USERNAME':<20}  {'DISPLAY NAME':<30}  EMAIL"
+    click.secho(header, fg="cyan")
+    click.secho("-" * len(header), dim=True)
+
+    for u in users:
+        account_id = u.get("accountId", "") or ""
+        username = u.get("name", "") or ""
+        display_name = u.get("displayName", "") or ""
+        email = u.get("emailAddress", "") or ""
+        click.echo(f"{account_id:<40}  {username:<20}  {display_name:<30}  {email}")
 
 if __name__ == "__main__":
     cli()

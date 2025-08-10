@@ -226,3 +226,48 @@ def unassign_issue(
     except Exception:
         msg = resp.text
     raise RuntimeError(f"Unassign failed [{resp.status_code}]: {msg}")
+
+def find_user(
+    query: str,
+    base_url_override: Optional[str] = None,
+    token_override: Optional[str] = None,
+) -> list[dict]:
+    """
+    Search Jira users by email, display name, or username.
+    Auto-detects whether to use `query` (Cloud/new DC) or `username` (older Server/DC).
+    """
+    base_url = (base_url_override or get_base_url())
+    if not base_url:
+        raise RuntimeError("No base URL configured. Run: cashout auth login")
+
+    token = get_token(base_url, token_override)
+    if not token:
+        raise RuntimeError("No token available. Run: cashout auth login")
+
+    search_url = f"{base_url.rstrip('/')}/rest/api/2/user/search"
+
+    # Try Cloud/new DC style first
+    for params in ({"query": query, "maxResults": 20}, {"username": query, "maxResults": 20}):
+        resp = requests.get(
+            search_url,
+            headers={"Accept": "application/json", **bearer_headers(token)},
+            params=params,
+            timeout=20,
+        )
+        if resp.status_code == 200:
+            try:
+                return resp.json()
+            except Exception as e:
+                raise RuntimeError(f"Failed to parse user search JSON: {e}")
+        elif resp.status_code == 400 and "username" in resp.text.lower():
+            # Try next param style
+            continue
+        else:
+            try:
+                msg = resp.json()
+            except Exception:
+                msg = resp.text
+            raise RuntimeError(f"User search failed [{resp.status_code}]: {msg}")
+
+    return []
+
