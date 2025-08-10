@@ -124,31 +124,34 @@ def ticket_comment(issue_key, comment_body, base_url, token):
     cid = data.get("id")
     click.secho(f"Comment {cid} added to {issue_key}", fg="green")
 
-
 @ticket.command("list")
 @click.option("-p", "--project", prompt=True, help="Project key (e.g., APP, PP).")
 @click.option("--all", "all_statuses", is_flag=True, help="Include Done/Closed issues (default: open only).")
 @click.option("--mine", is_flag=True, help="Only issues assigned to you.")
 @click.option("--assignee", help='Filter by assignee (username/email). Ignored if --mine is set.')
+@click.option("--assigned", is_flag=True, help="Only issues with an assignee.")
 @click.option("--unassigned", is_flag=True, help="Only issues with no assignee.")
 @click.option("--jql", "jql_extra", help="Extra JQL to AND onto the base query.")
 @click.option("-n", "--limit", type=int, default=50, show_default=True, help="Max issues to return.")
 @click.option("--json", "as_json", is_flag=True, help="Output raw JSON.")
+@click.option("--csv", "as_csv", is_flag=True, help="Output CSV instead of table.")
 @click.option("--base-url", help="Override saved base URL.")
 @click.option("--token", help="Override stored Bearer token.")
-def ticket_list(project, all_statuses, mine, assignee, unassigned, jql_extra, limit, as_json, base_url, token):
+def ticket_list(project, all_statuses, mine, assignee, assigned, unassigned, jql_extra, limit, as_json, as_csv, base_url, token):
     """
     List tickets in a project (defaults to open only).
     """
-
-    # Mutually exclusive: --mine / --assignee / --unassigned
-    if sum(bool(x) for x in (mine, bool(assignee), unassigned)) > 1:
-        click.secho("Use only one of: --mine, --assignee, or --unassigned.", fg="red", err=True)
+    # Mutually exclusive: --mine / --assignee / --assigned / --unassigned
+    if sum(bool(x) for x in (mine, bool(assignee), assigned, unassigned)) > 1:
+        click.secho("Use only one of: --mine, --assignee, --assigned, or --unassigned.", fg="red", err=True)
         raise SystemExit(1)
 
-    # Build final JQL with optional unassigned clause
+    # Build final JQL with optional assignment clauses
     final_jql = jql_extra or ""
-    if unassigned:
+    if assigned:
+        clause = "assignee is not EMPTY"
+        final_jql = f"{final_jql} AND {clause}" if final_jql else clause
+    elif unassigned:
         clause = "assignee is EMPTY"
         final_jql = f"{final_jql} AND {clause}" if final_jql else clause
 
@@ -157,7 +160,7 @@ def ticket_list(project, all_statuses, mine, assignee, unassigned, jql_extra, li
             project_key=project,
             jql_extra=final_jql,
             only_open=not all_statuses,
-            assignee=None if (mine or unassigned) else assignee,
+            assignee=None if (mine or assigned or unassigned) else assignee,
             mine=mine,
             limit=limit,
             base_url_override=base_url,
@@ -170,68 +173,91 @@ def ticket_list(project, all_statuses, mine, assignee, unassigned, jql_extra, li
     issues = data.get("issues", [])
     total = data.get("total", 0)
 
+    # Raw JSON output
     if as_json:
         click.echo(json.dumps(data, indent=2))
+        return
+
+    # CSV output
+    if as_csv:
+        import csv, sys
+        writer = csv.writer(sys.stdout)
+        writer.writerow(["KEY", "TYPE", "STATUS", "PRIORITY", "ASSIGNEE", "UPDATED", "SUMMARY"])
+        for it in issues:
+            f = (it.get("fields") or {})
+            assg = f.get("assignee") or {}
+            updated_raw = f.get("updated", "")
+            try:
+                updated = datetime.fromisoformat(updated_raw.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                updated = updated_raw or ""
+            writer.writerow([
+                it.get("key", "") or "",
+                (f.get("issuetype") or {}).get("name", "") or "",
+                (f.get("status") or {}).get("name", "") or "",
+                (f.get("priority") or {}).get("name", "") or "",
+                assg.get("displayName") or assg.get("name") or "",
+                updated,
+                f.get("summary", "") or "",
+            ])
         return
 
     if not issues:
         click.secho("No issues found.", fg="yellow")
         return
 
+    # Helpers
     def pick(field, dct, default=""):
         val = (dct or {}).get(field, default)
         return default if val is None else val
 
+    def trunc(s, n):
+        return s if len(s) <= n else s[: n - 1] + "…"
+
+    # Build rows
     rows = []
     for it in issues:
-        key = it.get("key", "")
+        key = it.get("key", "") or ""
         f = it.get("fields", {}) or {}
-
-        summary = pick("summary", f, "")
-        issuetype = (pick("issuetype", f, {}) or {}).get("name", "")
-        status = (pick("status", f, {}) or {}).get("name", "")
-        prio = (pick("priority", f, {}) or {}).get("name", "")
-
-        assg = pick("assignee", f, {}) or {}
+        summary   = pick("summary", f, "")
+        issuetype = (pick("issuetype", f, {}) or {}).get("name", "") or ""
+        status    = (pick("status",    f, {}) or {}).get("name", "") or ""
+        prio      = (pick("priority",  f, {}) or {}).get("name", "") or ""
+        assg      = pick("assignee", f, {}) or {}
         assignee_name = assg.get("displayName") or assg.get("name") or ""
-
         updated_raw = pick("updated", f, "")
         try:
             updated = datetime.fromisoformat(updated_raw.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M")
         except Exception:
             updated = updated_raw or ""
-
         rows.append((key, issuetype, status, prio, assignee_name, updated, summary))
 
-    def trunc(s, n):
-        return s if len(s) <= n else s[: n - 1] + "…"
-
-    widths = {
-        "key": 11,
-        "type": 8,
-        "status": 12,
-        "prio": 8,
-        "assignee": 18,
-        "updated": 16,
-    }
-
+    # Table widths and header
+    widths = {"key": 11, "type": 8, "status": 12, "prio": 8, "assignee": 18, "updated": 16}
     header = f"{'KEY':<{widths['key']}}  {'TYPE':<{widths['type']}}  {'STATUS':<{widths['status']}}  {'PRIORITY':<{widths['prio']}}  {'ASSIGNEE':<{widths['assignee']}}  {'UPDATED':<{widths['updated']}}  SUMMARY"
     click.secho(header, fg="cyan")
     click.secho("-" * len(header), dim=True)
 
+    # Print colored rows (yellow unassigned, blue assigned)
     for key, itype, status, prio, assignee_name, updated, summary in rows:
+        plain_assignee = assignee_name.strip() or "(unassigned)"
+        plain_trunc = trunc(plain_assignee, widths["assignee"])
+        colored = click.style(plain_trunc, fg="yellow" if plain_assignee == "(unassigned)" else "blue")
+        pad = " " * (widths["assignee"] - len(plain_trunc))
+
         line = (
             f"{trunc(key, widths['key']):<{widths['key']}}  "
             f"{trunc(itype, widths['type']):<{widths['type']}}  "
             f"{trunc(status, widths['status']):<{widths['status']}}  "
             f"{trunc(prio, widths['prio']):<{widths['prio']}}  "
-            f"{trunc(assignee_name, widths['assignee']):<{widths['assignee']}}  "
+            f"{colored}{pad}  "
             f"{trunc(updated, widths['updated']):<{widths['updated']}}  "
             f"{summary}"
         )
         click.echo(line)
 
     click.secho(f"\nShowing {len(issues)} of ~{total} matching issues.", dim=True)
+
 
 
 @ticket.command("assign")
