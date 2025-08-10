@@ -9,6 +9,7 @@ import click
 
 from .auth import auth as auth_group, get_base_url
 from .issue import create_issue_simple, add_comment, search_issues, assign_issue, unassign_issue, find_user
+from .open import open_issue
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli():
@@ -340,6 +341,31 @@ def ticket_whois(query, base_url, token):
         display_name = u.get("displayName", "") or ""
         email = u.get("emailAddress", "") or ""
         click.echo(f"{account_id:<40}  {username:<20}  {display_name:<30}  {email}")
+@ticket.command("open")
+@click.argument("issue_key", required=True)
+@click.option("--no-validate", is_flag=True, help="Do not call Jira to validate the issue exists.")
+@click.option("--browser", help='Browser to use (e.g., "chrome", "firefox", "safari"). Falls back to default.')
+@click.option("--print-only", is_flag=True, help="Print the URL but do not open a browser.")
+@click.option("--base-url", help="Override saved base URL.")
+@click.option("--token", help="Override stored Bearer token (used only when validating).")
+def ticket_open(issue_key, no_validate, browser, print_only, base_url, token):
+    """
+    Open ISSUE-KEY in your web browser.
+    """
+    try:
+        url = open_issue(
+            issue_key,
+            base_url_override=base_url,
+            token_override=token,
+            validate=not no_validate,
+            browser=browser,
+            print_only=print_only,
+        )
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    click.echo(url)
 
 
 if __name__ == "__main__":

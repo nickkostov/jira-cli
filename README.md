@@ -129,3 +129,18 @@ cashout ticket assign PP-123 --email svetoslav.nenov@weareplanet.com
 
 # Assign by email when multiple matches exist
 cashout ticket assign PP-123 --email "svetoslav" --first
+
+# Open an issue in your default browser
+cashout ticket open PP-123
+
+# Just print the URL (don’t open)
+cashout ticket open PP-123 --print-only
+
+# Skip server validation (faster, works without token)
+cashout ticket open PP-123 --no-validate
+
+# Force a specific browser (falls back to default if missing)
+cashout ticket open PP-123 --browser chrome
+
+# Using a different base URL or token just for this call
+cashout ticket open PP-123 --base-url https://jira.weareplanet.com --token "$JIRA_BEARER_TOKEN"
