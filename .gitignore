@@ -1,0 +1,55 @@
+# Python bytecode / build
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+*.manifest
+*.spec
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+*.env
+*.venv
+
+# macOS
+.DS_Store
+
+# VSCode / IDE configs
+.vscode/
+.idea/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Cache / temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# OS-specific
+Thumbs.db
+
+# Cashout config
+config.json
+cashout.json
+*.sqlite
+
+# Keyring test files
+.keyring/
+
+# Ignore generated readme cache or docs build
+_site/
+docs/_build/
