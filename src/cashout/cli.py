@@ -8,8 +8,7 @@ from datetime import datetime
 import click
 
 from .auth import auth as auth_group, get_base_url
-from .issue import create_issue_simple, add_comment, search_issues
-
+from .issue import create_issue_simple, add_comment, search_issues, assign_issue, unassign_issue
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli():
@@ -211,6 +210,56 @@ def ticket_list(project, all_statuses, mine, assignee, jql_extra, limit, as_json
         click.echo(line)
 
     click.secho(f"\nShowing {len(issues)} of ~{total} matching issues.", dim=True)
+
+@ticket.command("assign")
+@click.argument("issue_key", required=True)
+@click.option("--user", help="Jira username (Server/DC). Mutually exclusive with --account-id.")
+@click.option("--account-id", help="Jira accountId (Cloud/DC). Takes precedence over --user if both supplied.")
+@click.option("--base-url", help="Override saved base URL.")
+@click.option("--token", help="Override stored Bearer token.")
+def ticket_assign(issue_key, user, account_id, base_url, token):
+    """
+    Assign ISSUE-KEY to a user.
+    """
+    if not account_id and not user:
+        click.secho("Provide --account-id (preferred) or --user.", fg="red", err=True)
+        raise SystemExit(1)
+
+    try:
+        assign_issue(
+            issue_key=issue_key,
+            user=None if account_id else user,
+            account_id=account_id,
+            base_url_override=base_url,
+            token_override=token,
+        )
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    who = account_id or user
+    click.secho(f"Assigned {issue_key} → {who}", fg="green")
+
+
+@ticket.command("unassign")
+@click.argument("issue_key", required=True)
+@click.option("--base-url", help="Override saved base URL.")
+@click.option("--token", help="Override stored Bearer token.")
+def ticket_unassign(issue_key, base_url, token):
+    """
+    Remove assignee from ISSUE-KEY.
+    """
+    try:
+        unassign_issue(
+            issue_key=issue_key,
+            base_url_override=base_url,
+            token_override=token,
+        )
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    click.secho(f"Unassigned {issue_key}", fg="green")
 
 
 if __name__ == "__main__":

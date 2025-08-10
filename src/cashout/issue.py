@@ -2,8 +2,7 @@
 from __future__ import annotations
 import json
 import requests
-from typing import Optional, Dict, Any, List
-from typing import Tuple, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from .auth import get_base_url, get_token, bearer_headers  # reuse auth helpers
 
@@ -146,3 +145,84 @@ def search_issues(
         start_at += len(issues)
 
     return {"total": total or 0, "issues": all_issues}
+
+def assign_issue(
+    issue_key: str,
+    user: Optional[str] = None,
+    account_id: Optional[str] = None,
+    base_url_override: Optional[str] = None,
+    token_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Assign an issue.
+    Jira API v2 supports:
+      - {"name": "<username>"}      # Server/DC
+      - {"accountId": "<accountId>"}# Cloud/DC (if enabled)
+    """
+    base_url = (base_url_override or get_base_url())
+    if not base_url:
+        raise RuntimeError("No base URL configured. Run: cashout auth login")
+
+    token = get_token(base_url, token_override)
+    if not token:
+        raise RuntimeError("No token available. Run: cashout auth login")
+
+    if not account_id and not user:
+        raise RuntimeError("Provide --account-id or --user to assign.")
+
+    url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/assignee"
+    payload: Dict[str, Any] = {"accountId": account_id} if account_id else {"name": user}
+
+    resp = requests.put(
+        url,
+        headers={"Accept": "application/json", "Content-Type": "application/json", **bearer_headers(token)},
+        json=payload,
+        timeout=20,
+    )
+
+    # Jira often returns 204 No Content on success
+    if resp.status_code in (200, 204):
+        return {"ok": True, "status": resp.status_code}
+
+    try:
+        msg = resp.json()
+    except Exception:
+        msg = resp.text
+    raise RuntimeError(f"Assign failed [{resp.status_code}]: {msg}")
+
+
+def unassign_issue(
+    issue_key: str,
+    base_url_override: Optional[str] = None,
+    token_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Unassign an issue.
+    Jira API v2: PUT /issue/{key}/assignee with {"name": None} (or {"accountId": None})
+    """
+    base_url = (base_url_override or get_base_url())
+    if not base_url:
+        raise RuntimeError("No base URL configured. Run: cashout auth login")
+
+    token = get_token(base_url, token_override)
+    if not token:
+        raise RuntimeError("No token available. Run: cashout auth login")
+
+    url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/assignee"
+    payload = {"name": None}  # works for Server/DC; Cloud also accepts {"accountId": None}
+
+    resp = requests.put(
+        url,
+        headers={"Accept": "application/json", "Content-Type": "application/json", **bearer_headers(token)},
+        json=payload,
+        timeout=20,
+    )
+
+    if resp.status_code in (200, 204):
+        return {"ok": True, "status": resp.status_code}
+
+    try:
+        msg = resp.json()
+    except Exception:
+        msg = resp.text
+    raise RuntimeError(f"Unassign failed [{resp.status_code}]: {msg}")
