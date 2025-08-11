@@ -17,7 +17,8 @@ from .issue import (
     assign_issue,
     unassign_issue,
     find_user,
-    attach_files
+    attach_files,
+    get_issue
 )
 
 from .open import open_issue
@@ -610,6 +611,108 @@ def ticket_attach(issue_key, files, base_url, token):
         click.echo(f"{aid:<10}  {name_short:<30}  {size:<12}  {author}")
 
     click.secho(f"\nUploaded {len(meta_list)} attachment(s) to {issue_key}.", fg="green")
+
+@ticket.command("show")
+@click.argument("issue_key", required=True)
+@click.option("--comments", type=int, default=3, show_default=True,
+              help="Number of most recent comments to show.")
+@click.option("--base-url", help="Override saved base URL.")
+@click.option("--token", help="Override stored Bearer token.")
+@click.option("--json", "as_json", is_flag=True, help="Output raw JSON.")
+def ticket_show(issue_key, comments, base_url, token, as_json):
+    """
+    Show key fields, description, and recent comments for an issue.
+    """
+    try:
+        issue = get_issue(
+            issue_key=issue_key,
+            base_url_override=base_url,
+            token_override=token,
+            expand=["renderedFields", "names", "transitions", "changelog"]
+        )
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    if as_json:
+        click.echo(json.dumps(issue, indent=2))
+        return
+
+    f = issue.get("fields", {}) or {}
+    key = issue.get("key", issue_key)
+    summary = f.get("summary", "")
+    status = (f.get("status") or {}).get("name", "")
+    issue_type = (f.get("issuetype") or {}).get("name", "")
+    priority = (f.get("priority") or {}).get("name", "")
+    reporter = (f.get("reporter") or {}).get("displayName", "")
+    assignee = (f.get("assignee") or {}).get("displayName", "") or "Unassigned"
+    created = f.get("created", "")
+    updated = f.get("updated", "")
+    description = f.get("description", "")
+
+    # --- Handle Jira description formats (string or ADF dict) ---
+    def _adf_to_text(node) -> str:
+        # Minimal ADF → text: recursively gather text from content nodes
+        if isinstance(node, dict):
+            t = node.get("type")
+            if t == "text":
+                return node.get("text", "")
+            parts = []
+            for child in (node.get("content") or []):
+                parts.append(_adf_to_text(child))
+            # Add newlines for block-level nodes
+            if t in {"paragraph", "bulletList", "orderedList", "heading", "blockquote"}:
+                return "".join(parts) + ("\n" if parts else "")
+            return "".join(parts)
+        elif isinstance(node, list):
+            return "".join(_adf_to_text(c) for c in node)
+        return ""
+
+    if isinstance(description, dict):  # likely ADF
+        description_text = _adf_to_text(description).strip()
+    else:
+        description_text = (description or "").strip()
+
+    # Pretty truncate super long descriptions (so terminals survive)
+    max_desc_len = 1200
+    desc_shown = description_text[:max_desc_len].rstrip()
+    if len(description_text) > max_desc_len:
+        desc_shown += "\n…(truncated)"
+
+    # --- Color coding ---
+    status_color = "green" if status.lower() == "done" else "cyan"
+    assignee_color = "yellow" if assignee == "Unassigned" else "blue"
+
+    # --- Big subject ---
+    click.secho(f"[{key}] {summary}", fg="cyan", bold=True)
+    click.echo()
+    click.echo(f"Type: {issue_type}")
+    click.secho(f"Status: {status}", fg=status_color)
+    click.echo(f"Priority: {priority}")
+    click.echo(f"Reporter: {reporter}")
+    click.secho(f"Assignee: {assignee}", fg=assignee_color)
+    click.echo(f"Created: {created}")
+    click.echo(f"Updated: {updated}")
+
+    # --- Description ---
+    click.secho("\nDescription:", fg="magenta")
+    if desc_shown:
+        click.echo(desc_shown)
+    else:
+        click.secho("(no description)", dim=True)
+
+    # --- Comments ---
+    comments_list = (f.get("comment") or {}).get("comments", [])
+    if comments_list:
+        click.secho(f"\nLast {min(comments, len(comments_list))} comment(s):", fg="yellow")
+        for c in sorted(comments_list, key=lambda x: x.get("created", ""), reverse=True)[:comments]:
+            author = (c.get("author") or {}).get("displayName", "Unknown")
+            body = (c.get("body") or "").strip()
+            created_at = c.get("created", "")
+            click.secho(f"\n[{author} @ {created_at}]", fg="green")
+            click.echo(body)
+    else:
+        click.secho("\nNo comments found.", dim=True)
 
 
 if __name__ == "__main__":

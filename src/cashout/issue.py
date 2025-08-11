@@ -373,3 +373,41 @@ def attach_files(
         for fh in to_close:
             try: fh.close()
             except Exception: pass
+
+def get_issue(
+    issue_key: str,
+    base_url_override: Optional[str] = None,
+    token_override: Optional[str] = None,
+    expand: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Fetch a full Jira issue with optional expand fields (e.g., ["renderedFields","names","transitions"]).
+    Returns the raw JSON.
+    """
+    base_url = base_url_override or get_base_url()
+    if not base_url:
+        raise RuntimeError("No base URL configured. Run: cashout auth login")
+
+    token = get_token(base_url, token_override)
+    if not token:
+        raise RuntimeError("No token available. Run: cashout auth login")
+
+    url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}"
+    params = {}
+    if expand:
+        params["expand"] = ",".join(expand)
+
+    resp = requests.get(
+        url,
+        headers={"Accept": "application/json", **bearer_headers(token)},
+        params=params,
+        timeout=30,
+    )
+    if resp.status_code != 200:
+        try:
+            msg = resp.json()
+        except Exception:
+            msg = resp.text
+        raise RuntimeError(f"Issue fetch failed [{resp.status_code}]: {msg}")
+
+    return resp.json()
