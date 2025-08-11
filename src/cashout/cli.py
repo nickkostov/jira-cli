@@ -4,6 +4,7 @@ from __future__ import annotations
 from .issue import transition_issue, get_transitions
 from datetime import datetime
 
+import re
 import os
 import json
 import click
@@ -616,12 +617,14 @@ def ticket_attach(issue_key, files, base_url, token):
 @click.argument("issue_key", required=True)
 @click.option("--comments", type=int, default=3, show_default=True,
               help="Number of most recent comments to show.")
+@click.option("--full", is_flag=True, help="Show full description without truncating.")
 @click.option("--base-url", help="Override saved base URL.")
 @click.option("--token", help="Override stored Bearer token.")
 @click.option("--json", "as_json", is_flag=True, help="Output raw JSON.")
-def ticket_show(issue_key, comments, base_url, token, as_json):
+def ticket_show(issue_key, comments, full, base_url, token, as_json):
     """
     Show key fields, description, and recent comments for an issue.
+    Highlights @mentions, links, issue keys, and `inline code`.
     """
     try:
         issue = get_issue(
@@ -650,9 +653,8 @@ def ticket_show(issue_key, comments, base_url, token, as_json):
     updated = f.get("updated", "")
     description = f.get("description", "")
 
-    # --- Handle Jira description formats (string or ADF dict) ---
+    # ---- Helpers: ADF → text and highlight ----
     def _adf_to_text(node) -> str:
-        # Minimal ADF → text: recursively gather text from content nodes
         if isinstance(node, dict):
             t = node.get("type")
             if t == "text":
@@ -660,7 +662,6 @@ def ticket_show(issue_key, comments, base_url, token, as_json):
             parts = []
             for child in (node.get("content") or []):
                 parts.append(_adf_to_text(child))
-            # Add newlines for block-level nodes
             if t in {"paragraph", "bulletList", "orderedList", "heading", "blockquote"}:
                 return "".join(parts) + ("\n" if parts else "")
             return "".join(parts)
@@ -668,22 +669,57 @@ def ticket_show(issue_key, comments, base_url, token, as_json):
             return "".join(_adf_to_text(c) for c in node)
         return ""
 
-    if isinstance(description, dict):  # likely ADF
+    # Regexes
+    link_re = re.compile(r"https?://\S+")
+    key_re = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+    mention_re = re.compile(r"@[A-Za-z0-9._-]+")
+    code_re = re.compile(r"`([^`]+)`")
+
+    def _style_noncode(seg: str) -> str:
+        seg = link_re.sub(lambda m: click.style(m.group(0), fg="bright_blue"), seg)
+        seg = key_re.sub(lambda m: click.style(m.group(0), fg="cyan"), seg)
+        seg = mention_re.sub(lambda m: click.style(m.group(0), fg="yellow"), seg)
+        return seg
+
+    def _highlight_text(text: str) -> str:
+        # Preserve code blocks first, then style the rest
+        out = []
+        last = 0
+        for m in code_re.finditer(text):
+            # non-code before
+            out.append(_style_noncode(text[last:m.start()]))
+            # code segment (without backticks)
+            code_txt = m.group(1)
+            out.append(click.style(code_txt, fg="magenta"))
+            last = m.end()
+        out.append(_style_noncode(text[last:]))
+        return "".join(out)
+
+    # Normalize description (string or ADF)
+    if isinstance(description, dict):
         description_text = _adf_to_text(description).strip()
     else:
         description_text = (description or "").strip()
 
-    # Pretty truncate super long descriptions (so terminals survive)
-    max_desc_len = 1200
-    desc_shown = description_text[:max_desc_len].rstrip()
-    if len(description_text) > max_desc_len:
-        desc_shown += "\n…(truncated)"
+    # Truncate unless --full
+    if not full:
+        max_desc_len = 1200
+        desc_shown_raw = description_text[:max_desc_len].rstrip()
+        if len(description_text) > max_desc_len:
+            desc_shown_raw += "\n…(truncated)"
+    else:
+        desc_shown_raw = description_text
 
-    # --- Color coding ---
+    # ---- Colors for status/assignee ----
     status_color = "green" if status.lower() == "done" else "cyan"
     assignee_color = "yellow" if assignee == "Unassigned" else "blue"
 
-    # --- Big subject ---
+    # ---- Labels & Components ----
+    labels_list = f.get("labels") or []
+    components_list = [c.get("name", "") for c in (f.get("components") or []) if c.get("name")]
+
+
+    # ---- Title / fields ----
     click.secho(f"[{key}] {summary}", fg="cyan", bold=True)
     click.echo()
     click.echo(f"Type: {issue_type}")
@@ -694,23 +730,34 @@ def ticket_show(issue_key, comments, base_url, token, as_json):
     click.echo(f"Created: {created}")
     click.echo(f"Updated: {updated}")
 
-    # --- Description ---
+    # ---- Description (highlighted) ----
     click.secho("\nDescription:", fg="magenta")
-    if desc_shown:
-        click.echo(desc_shown)
+    if desc_shown_raw:
+        click.echo(_highlight_text(desc_shown_raw))
     else:
         click.secho("(no description)", dim=True)
 
-    # --- Comments ---
+    if labels_list:
+        labels_str = " ".join(click.style(f"[{lbl}]", fg="green") for lbl in labels_list)
+        click.echo(f"Labels: {labels_str}")
+
+    if components_list:
+        components_str = ", ".join(click.style(c, fg="cyan") for c in components_list)
+        click.echo(f"Components: {components_str}")
+
+    click.echo(f"Created: {created}")
+    click.echo(f"Updated: {updated}")
+
+    # ---- Comments (highlighted) ----
     comments_list = (f.get("comment") or {}).get("comments", [])
     if comments_list:
         click.secho(f"\nLast {min(comments, len(comments_list))} comment(s):", fg="yellow")
         for c in sorted(comments_list, key=lambda x: x.get("created", ""), reverse=True)[:comments]:
             author = (c.get("author") or {}).get("displayName", "Unknown")
-            body = (c.get("body") or "").strip()
+            body_raw = (c.get("body") or "").strip()
             created_at = c.get("created", "")
             click.secho(f"\n[{author} @ {created_at}]", fg="green")
-            click.echo(body)
+            click.echo(_highlight_text(body_raw))
     else:
         click.secho("\nNo comments found.", dim=True)
 
