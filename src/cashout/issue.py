@@ -1,7 +1,7 @@
 # src/cashout/issue.py
 from __future__ import annotations
 import json
-import requests
+import requests # type: ignore
 import os
 from typing import Optional, Dict, Any, List, Tuple
 

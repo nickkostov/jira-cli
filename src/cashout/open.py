@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import webbrowser
-import requests
+import requests # type: ignore
 from typing import Optional, Dict, Any
 
 from .auth import get_base_url, get_token, bearer_headers
