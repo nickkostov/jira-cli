@@ -2,13 +2,14 @@
 # src/cashout/cli.py
 from __future__ import annotations
 from .issue import transition_issue, get_transitions
+from datetime import datetime
 
 import os
 import json
-from datetime import datetime
 import click
+import requests
 
-from .auth import auth as auth_group, get_base_url
+from .auth import auth as auth_group, get_base_url, get_token
 from .issue import (
     create_issue_simple,
     add_comment,
@@ -465,6 +466,103 @@ def ticket_transition(issue_key, status_name, base_url, token):
         raise SystemExit(1)
 
     click.secho(f"✅ {issue_key} transitioned to '{status_name}'", fg="green")
+
+@ticket.command("assign")
+@click.argument("issue_key", required=True)
+@click.option("--me", is_flag=True, help="Assign to yourself.")
+@click.option("--email", help="User email (resolve to accountId/username automatically).")
+@click.option("--user", help="Jira username (Server/DC). Mutually exclusive with --account-id and --email.")
+@click.option("--account-id", help="Jira accountId (Cloud/DC). Takes precedence over --user if both supplied.")
+@click.option("--first", is_flag=True, help="When --email matches multiple users, pick the first automatically.")
+@click.option("--base-url", help="Override saved base URL.")
+@click.option("--token", help="Override stored Bearer token.")
+def ticket_assign(issue_key, me, email, user, account_id, first, base_url, token):
+    """
+    Assign ISSUE-KEY to a user.
+
+    Priority order:
+      --me > --account-id > --user > --email (resolved).
+    """
+    resolved_account_id = account_id
+    resolved_user = user
+
+    if sum(bool(x) for x in (me, bool(email), bool(user), bool(account_id))) > 1:
+        click.secho("Use only one of: --me, --email, --user, or --account-id.", fg="red", err=True)
+        raise SystemExit(1)
+
+    if me:
+        base_url_f = base_url or get_base_url()
+        if not base_url_f:
+            click.secho("No base URL configured. Run: cashout auth login", fg="red", err=True)
+            raise SystemExit(1)
+    
+        try:
+            token_f = get_token(base_url_f, token)
+        except Exception as e:
+            click.secho(f"Token error: {e}", fg="red", err=True)
+            raise SystemExit(1)
+    
+        if not token_f:
+            click.secho("No token available. Run: cashout auth login", fg="red", err=True)
+            raise SystemExit(1)
+    
+        try:
+            resp = requests.get(
+                f"{base_url_f.rstrip('/')}/rest/api/2/myself",
+                headers={"Authorization": f"Bearer {token_f}", "Accept": "application/json"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            click.secho(f"Failed to resolve current user via /myself: {e}", fg="red", err=True)
+            raise SystemExit(1)
+    
+        me_data = resp.json() or {}
+        resolved_account_id = me_data.get("accountId")
+        resolved_user = me_data.get("name")
+
+
+    elif email:
+        try:
+            candidates = find_user(email, base_url_override=base_url, token_override=token)
+        except Exception as e:
+            click.secho(f"User lookup failed: {e}", fg="red", err=True)
+            raise SystemExit(1)
+
+        if not candidates:
+            click.secho(f"No users found for '{email}'.", fg="yellow")
+            raise SystemExit(1)
+
+        exact = [u for u in candidates if (u.get("emailAddress") or "").lower() == email.lower()]
+        if len(exact) == 1:
+            resolved_account_id = exact[0].get("accountId")
+            resolved_user = exact[0].get("name")
+        elif len(exact) > 1 and not first:
+            click.secho(f"Multiple exact matches for {email}. Specify --account-id or pass --first.", fg="yellow")
+            raise SystemExit(1)
+        else:
+            chosen = candidates[0]
+            resolved_account_id = chosen.get("accountId")
+            resolved_user = chosen.get("name")
+
+    if not resolved_account_id and not resolved_user:
+        click.secho("Provide one of: --me, --email, --account-id, or --user.", fg="red", err=True)
+        raise SystemExit(1)
+
+    try:
+        assign_issue(
+            issue_key=issue_key,
+            user=None if resolved_account_id else resolved_user,
+            account_id=resolved_account_id,
+            base_url_override=base_url,
+            token_override=token,
+        )
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    who = resolved_account_id or resolved_user or "me"
+    click.secho(f"Assigned {issue_key} → {who}", fg="green")
 
 
 if __name__ == "__main__":
