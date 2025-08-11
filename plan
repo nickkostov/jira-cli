@@ -11,7 +11,7 @@ Debug mode: --debug to print the exact JQL and request/response on failures.
 Useful day‑to‑day ops
 ~~Transitions: ticket transition PP-123 --to "In Progress" (lists choices if omitted).~~
 
-Assign to me: ticket assign PP-123 --me (resolves current user).
+~~Assign to me: ticket assign PP-123 --me (resolves current user).~~
 
 Watch/Unwatch: ticket watch PP-123, ticket unwatch PP-123.
 

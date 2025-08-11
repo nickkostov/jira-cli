@@ -17,7 +17,9 @@ from .issue import (
     assign_issue,
     unassign_issue,
     find_user,
+    attach_files
 )
+
 from .open import open_issue
 
 
@@ -495,17 +497,17 @@ def ticket_assign(issue_key, me, email, user, account_id, first, base_url, token
         if not base_url_f:
             click.secho("No base URL configured. Run: cashout auth login", fg="red", err=True)
             raise SystemExit(1)
-    
+
         try:
             token_f = get_token(base_url_f, token)
         except Exception as e:
             click.secho(f"Token error: {e}", fg="red", err=True)
             raise SystemExit(1)
-    
+
         if not token_f:
             click.secho("No token available. Run: cashout auth login", fg="red", err=True)
             raise SystemExit(1)
-    
+
         try:
             resp = requests.get(
                 f"{base_url_f.rstrip('/')}/rest/api/2/myself",
@@ -516,7 +518,7 @@ def ticket_assign(issue_key, me, email, user, account_id, first, base_url, token
         except requests.RequestException as e:
             click.secho(f"Failed to resolve current user via /myself: {e}", fg="red", err=True)
             raise SystemExit(1)
-    
+
         me_data = resp.json() or {}
         resolved_account_id = me_data.get("accountId")
         resolved_user = me_data.get("name")
@@ -563,6 +565,51 @@ def ticket_assign(issue_key, me, email, user, account_id, first, base_url, token
 
     who = resolved_account_id or resolved_user or "me"
     click.secho(f"Assigned {issue_key} → {who}", fg="green")
+
+@ticket.command("attach")
+@click.argument("issue_key", required=True)
+@click.argument("files", nargs=-1, required=True, metavar="FILE...")
+@click.option("--base-url", help="Override saved base URL.")
+@click.option("--token", help="Override stored Bearer token.")
+def ticket_attach(issue_key, files, base_url, token):
+    """
+    Attach one or more files to ISSUE-KEY.
+
+    Example:
+      cashout ticket attach PP-123 ./file.log ./screenshot.png
+    """
+    # de-dup & normalize
+    paths = [os.path.expanduser(p) for p in files]
+    try:
+        meta_list = attach_files(
+            issue_key=issue_key,
+            paths=paths,
+            base_url_override=base_url,
+            token_override=token,
+        )
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    if not meta_list:
+        click.secho("No attachments uploaded.", fg="yellow")
+        return
+
+    # Pretty print a small table
+    header = f"{'ID':<10}  {'FILENAME':<30}  {'SIZE(B)':<12}  AUTHOR"
+    click.secho(header, fg="cyan")
+    click.secho("-" * len(header), dim=True)
+
+    for m in meta_list:
+        aid = str(m.get("id", ""))
+        name = m.get("filename", "")
+        size = str(m.get("size", ""))
+        author = (m.get("author") or {}).get("displayName") or (m.get("author") or {}).get("name") or ""
+        # truncate filename to keep tidy
+        name_short = name if len(name) <= 30 else name[:29] + "…"
+        click.echo(f"{aid:<10}  {name_short:<30}  {size:<12}  {author}")
+
+    click.secho(f"\nUploaded {len(meta_list)} attachment(s) to {issue_key}.", fg="green")
 
 
 if __name__ == "__main__":

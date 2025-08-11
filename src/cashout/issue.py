@@ -313,3 +313,63 @@ def transition_issue(issue_key, transition_id, base_url_override=None, token_ove
     )
     resp.raise_for_status()
     return resp.json() if resp.text else {"ok": True}
+
+def attach_files(
+    issue_key: str,
+    paths: list[str],
+    base_url_override: Optional[str] = None,
+    token_override: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Upload one or more files to an issue.
+    Jira: POST /rest/api/2/issue/{key}/attachments
+    Requires header: X-Atlassian-Token: no-check
+    Returns a list of attachment metadata dicts.
+    """
+    base_url = (base_url_override or get_base_url())
+    if not base_url:
+        raise RuntimeError("No base URL configured. Run: cashout auth login")
+
+    token = get_token(base_url, token_override)
+    if not token:
+        raise RuntimeError("No token available. Run: cashout auth login")
+
+    url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/attachments"
+
+    # prepare files; keep file handles open until request completes
+    to_close = []
+    files = []
+    try:
+        for p in paths:
+            if not os.path.isfile(p):
+                raise RuntimeError(f"File not found: {p}")
+            fh = open(p, "rb")
+            to_close.append(fh)
+            files.append(("file", (os.path.basename(p), fh, "application/octet-stream")))
+
+        resp = requests.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+                "X-Atlassian-Token": "no-check",  # required by Jira for attachments
+            },
+            files=files,  # requests sets proper multipart Content-Type
+            timeout=60,
+        )
+        # Jira returns 200 and a JSON array of attachments
+        if resp.status_code not in (200, 201):
+            try:
+                msg = resp.json()
+            except Exception:
+                msg = resp.text
+            raise RuntimeError(f"Attachment upload failed [{resp.status_code}]: {msg}")
+
+        try:
+            return resp.json()  # list[dict]
+        except Exception as e:
+            raise RuntimeError(f"Failed to parse attachment response JSON: {e}")
+    finally:
+        for fh in to_close:
+            try: fh.close()
+            except Exception: pass
