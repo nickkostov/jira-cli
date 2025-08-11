@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # src/cashout/cli.py
 from __future__ import annotations
+from .issue import transition_issue, get_transitions
 
 import os
 import json
@@ -415,6 +416,55 @@ def ticket_open(issue_key, no_validate, browser, print_only, base_url, token):
         raise SystemExit(1)
 
     click.echo(url)
+
+@ticket.command("transition")
+@click.argument("issue_key", required=True)
+@click.option("--to", "status_name", required=True, help="Destination status name (e.g., 'In Progress').")
+@click.option("--base-url", help="Override saved base URL.")
+@click.option("--token", help="Override stored Bearer token.")
+def ticket_transition(issue_key, status_name, base_url, token):
+    """
+    Change the status of a ticket to a given workflow transition name.
+    """
+    try:
+        transitions = get_transitions(
+            issue_key=issue_key,
+            base_url_override=base_url,
+            token_override=token
+        )
+    except Exception as e:
+        click.secho(f"Error fetching transitions: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    if not transitions:
+        click.secho("No transitions available for this issue.", fg="yellow")
+        return
+
+    # Try to find matching transition
+    match = None
+    for t in transitions:
+        if t.get("name", "").lower() == status_name.lower():
+            match = t
+            break
+
+    if not match:
+        click.secho(f"Status '{status_name}' not found. Available:", fg="yellow")
+        for t in transitions:
+            click.echo(f"- {t.get('name')}")
+        return
+
+    try:
+        transition_issue(
+            issue_key=issue_key,
+            transition_id=match.get("id"),
+            base_url_override=base_url,
+            token_override=token
+        )
+    except Exception as e:
+        click.secho(f"Error transitioning issue: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    click.secho(f"✅ {issue_key} transitioned to '{status_name}'", fg="green")
 
 
 if __name__ == "__main__":

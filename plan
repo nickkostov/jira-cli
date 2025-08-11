@@ -1,0 +1,52 @@
+Quick wins (1–2 files, minimal API wrangling)
+
+Git branch flow: cashout feat "summary" → create issue → git checkout -b feat/PP-123-summary.
+
+~~CSV export: ticket list -p PP --csv > issues.csv for reporting.~~
+
+Debug mode: --debug to print the exact JQL and request/response on failures.
+
+~~Unassigned filter: ticket list -p PP --unassigned.~~
+
+Useful day‑to‑day ops
+~~Transitions: ticket transition PP-123 --to "In Progress" (lists choices if omitted).~~
+
+Assign to me: ticket assign PP-123 --me (resolves current user).
+
+Watch/Unwatch: ticket watch PP-123, ticket unwatch PP-123.
+
+Attachments: ticket attach PP-123 ./file.log (multipart upload).
+
+Show details: ticket show PP-123 with key fields + last comments.
+
+Creation power‑ups
+Templates: ticket create --template bug.yaml (pre-fill fields/labels/priority).
+
+Custom fields: --cf customfield_12345="Value" (generic pass‑through).
+
+Component/version: --component API --fix-version "Q3 2025".
+
+Listing / filtering upgrades
+Date filters: --updated-since "2025-08-01" / --created-since 7d.
+
+Sort: --sort "updated DESC" (JQL ORDER BY passthrough).
+
+Pagination: --page 2 --page-size 50.
+
+Config & UX
+Profiles: cashout config profile add work ... then --profile work.
+
+Repo defaults: read .cashout.json in the repo (project, labels, branch prefix).
+
+Shell completion: cashout --install-completion for zsh/bash.
+
+Better errors: parse Jira error bodies and surface friendly messages.
+
+Automation / team workflows
+Bulk ops: ticket bulk --jql 'project=PP AND status="To Do"' --assign --me.
+
+SLA/age view: ticket list --age (shows days since created/updated, colorize > N days).
+
+Notifications: ticket remind PP-123 --when "tomorrow 9am" (local reminder hook).
+
+PR helper (if you use Bitbucket/GitHub): cashout pr --from current-branch --title "[PP-123] ...", link back to Jira.

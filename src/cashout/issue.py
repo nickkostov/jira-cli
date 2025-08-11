@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import requests
+import os
 from typing import Optional, Dict, Any, List, Tuple
 
 from .auth import get_base_url, get_token, bearer_headers  # reuse auth helpers
@@ -271,3 +272,44 @@ def find_user(
 
     return []
 
+def get_transitions(issue_key, base_url_override=None, token_override=None):
+    base_url = base_url_override or get_base_url()
+    if not base_url:
+        raise RuntimeError("No base URL configured. Run: cashout auth login")
+
+    token = get_token(base_url, token_override)
+    if not token:
+        raise RuntimeError("No token available. Run: cashout auth login")
+
+    url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/transitions"
+    resp = requests.get(
+        url,
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        timeout=20
+    )
+    resp.raise_for_status()
+    return resp.json().get("transitions", [])
+
+def transition_issue(issue_key, transition_id, base_url_override=None, token_override=None):
+    base_url = base_url_override or get_base_url()
+    if not base_url:
+        raise RuntimeError("No base URL configured. Run: cashout auth login")
+
+    token = get_token(base_url, token_override)
+    if not token:
+        raise RuntimeError("No token available. Run: cashout auth login")
+
+    url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/transitions"
+    payload = {"transition": {"id": transition_id}}
+    resp = requests.post(
+        url,
+        json=payload,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        },
+        timeout=20
+    )
+    resp.raise_for_status()
+    return resp.json() if resp.text else {"ok": True}
