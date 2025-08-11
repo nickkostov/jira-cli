@@ -623,8 +623,8 @@ def ticket_attach(issue_key, files, base_url, token):
 @click.option("--json", "as_json", is_flag=True, help="Output raw JSON.")
 def ticket_show(issue_key, comments, full, base_url, token, as_json):
     """
-    Show key fields, description, and recent comments for an issue.
-    Highlights @mentions, links, issue keys, and `inline code`.
+    Show key fields, labels/components, description, subtasks, linked issues,
+    and recent comments. Highlights @mentions, links, issue keys, and `inline code`.
     """
     try:
         issue = get_issue(
@@ -653,7 +653,7 @@ def ticket_show(issue_key, comments, full, base_url, token, as_json):
     updated = f.get("updated", "")
     description = f.get("description", "")
 
-    # ---- Helpers: ADF → text and highlight ----
+    # ---- ADF → text ----
     def _adf_to_text(node) -> str:
         if isinstance(node, dict):
             t = node.get("type")
@@ -669,7 +669,7 @@ def ticket_show(issue_key, comments, full, base_url, token, as_json):
             return "".join(_adf_to_text(c) for c in node)
         return ""
 
-    # Regexes
+    # ---- Highlight helpers ----
     link_re = re.compile(r"https?://\S+")
     key_re = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
     mention_re = re.compile(r"@[A-Za-z0-9._-]+")
@@ -682,15 +682,11 @@ def ticket_show(issue_key, comments, full, base_url, token, as_json):
         return seg
 
     def _highlight_text(text: str) -> str:
-        # Preserve code blocks first, then style the rest
         out = []
         last = 0
         for m in code_re.finditer(text):
-            # non-code before
             out.append(_style_noncode(text[last:m.start()]))
-            # code segment (without backticks)
-            code_txt = m.group(1)
-            out.append(click.style(code_txt, fg="magenta"))
+            out.append(click.style(m.group(1), fg="magenta"))
             last = m.end()
         out.append(_style_noncode(text[last:]))
         return "".join(out)
@@ -718,7 +714,6 @@ def ticket_show(issue_key, comments, full, base_url, token, as_json):
     labels_list = f.get("labels") or []
     components_list = [c.get("name", "") for c in (f.get("components") or []) if c.get("name")]
 
-
     # ---- Title / fields ----
     click.secho(f"[{key}] {summary}", fg="cyan", bold=True)
     click.echo()
@@ -727,15 +722,6 @@ def ticket_show(issue_key, comments, full, base_url, token, as_json):
     click.echo(f"Priority: {priority}")
     click.echo(f"Reporter: {reporter}")
     click.secho(f"Assignee: {assignee}", fg=assignee_color)
-    click.echo(f"Created: {created}")
-    click.echo(f"Updated: {updated}")
-
-    # ---- Description (highlighted) ----
-    click.secho("\nDescription:", fg="magenta")
-    if desc_shown_raw:
-        click.echo(_highlight_text(desc_shown_raw))
-    else:
-        click.secho("(no description)", dim=True)
 
     if labels_list:
         labels_str = " ".join(click.style(f"[{lbl}]", fg="green") for lbl in labels_list)
@@ -747,6 +733,71 @@ def ticket_show(issue_key, comments, full, base_url, token, as_json):
 
     click.echo(f"Created: {created}")
     click.echo(f"Updated: {updated}")
+
+    # ---- Description (highlighted) ----
+    click.secho("\nDescription:", fg="magenta")
+    if desc_shown_raw:
+        click.echo(_highlight_text(desc_shown_raw))
+    else:
+        click.secho("(no description)", dim=True)
+
+    # ---- Subtasks ----
+    subtasks = f.get("subtasks") or []
+    if subtasks:
+        click.secho("\nSubtasks:", fg="magenta")
+        for st in subtasks:
+            skey = st.get("key", "")
+            sf = st.get("fields", {}) or {}
+            ssum = sf.get("summary", "") or st.get("summary", "")
+            sstatus = (sf.get("status") or {}).get("name", "") or st.get("status", "")
+            sstatus_col = "green" if sstatus.lower() == "done" else "cyan"
+            line = f"{click.style(skey, fg='cyan')}: {ssum} [{sstatus}]"
+            click.echo(click.style(line, fg=sstatus_col) if sstatus_col == "green" else line)
+    else:
+        click.secho("\nSubtasks: (none)", dim=True)
+
+    # ---- Linked Issues ----
+    issuelinks = f.get("issuelinks") or []
+    if issuelinks:
+        click.secho("\nLinked issues:", fg="magenta")
+        # table header
+        header = f"{'RELATION':<18}  {'KEY':<12}  {'STATUS':<14}  SUMMARY"
+        click.secho(header, fg="cyan")
+        click.secho("-" * len(header), dim=True)
+
+        def _extract_issue(link: dict) -> tuple[str, str, str]:
+            """Return (key, status, summary) from inward/outward issue refs."""
+            issue_ref = link.get("inwardIssue") or link.get("outwardIssue") or {}
+            k = issue_ref.get("key", "")
+            f2 = issue_ref.get("fields", {}) or {}
+            s = (f2.get("status") or {}).get("name", "") or ""
+            su = f2.get("summary", "") or issue_ref.get("summary", "") or ""
+            return k, s, su
+
+        for l in issuelinks:
+            typ = (l.get("type") or {})
+            relation = typ.get("inward") if l.get("inwardIssue") else typ.get("outward") or typ.get("name", "")
+            relation = (relation or "").strip()
+            k2, s2, su2 = _extract_issue(l)
+            s_col = "green" if (s2 or "").lower() == "done" else "cyan"
+            # safe truncation for summary column
+            def trunc(s, n): return s if len(s) <= n else s[: n - 1] + "…"
+            line = (
+                f"{trunc(relation, 18):<18}  "
+                f"{click.style(k2, fg='cyan'):<12}  "
+                f"{trunc(s2, 14):<14}  "
+                f"{su2}"
+            )
+            # color status text within the assembled string by rebuilding that part
+            # simpler: print pieces with echo, keeping formatting:
+            click.echo(
+                f"{trunc(relation, 18):<18}  "
+                f"{click.style(k2, fg='cyan'):<12}  "
+                f"{click.style(trunc(s2, 14), fg=s_col):<14}  "
+                f"{su2}"
+            )
+    else:
+        click.secho("\nLinked issues: (none)", dim=True)
 
     # ---- Comments (highlighted) ----
     comments_list = (f.get("comment") or {}).get("comments", [])
@@ -760,6 +811,7 @@ def ticket_show(issue_key, comments, full, base_url, token, as_json):
             click.echo(_highlight_text(body_raw))
     else:
         click.secho("\nNo comments found.", dim=True)
+
 
 
 if __name__ == "__main__":
