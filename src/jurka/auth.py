@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/cashout/auth.py
+# src/jira/auth.py
 from __future__ import annotations
 
 import json
@@ -16,9 +16,9 @@ try:
 except Exception:  # pragma: no cover
     keyring = None  # type: ignore
 
-CONFIG_DIR = Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config")) / "cashout"
+CONFIG_DIR = Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config")) / "jira"
 CONFIG_PATH = CONFIG_DIR / "config.json"
-KEYRING_SERVICE = "cashout-bearer"
+KEYRING_SERVICE = "jira-bearer"
 
 
 # -----------------------------
@@ -118,7 +118,7 @@ def validate_token(base_url: str, token: str) -> Tuple[bool, Optional[Dict[str, 
 # -----------------------------
 # Click commands (auth group)
 # -----------------------------
-@click.group(help="Authentication commands for cashout.")
+@click.group(help="Authentication commands for jira.")
 def auth() -> None:
     pass
 
@@ -153,12 +153,12 @@ def cmd_login(base_url: str, token: str) -> None:
 def cmd_whoami(base_url: Optional[str], token: Optional[str]) -> None:
     base_url = (base_url or get_base_url())
     if not base_url:
-        click.secho("No base URL configured. Run: cashout auth login", fg="red", err=True)
+        click.secho("No base URL configured. Run: jira auth login", fg="red", err=True)
         raise SystemExit(1)
 
     tok = get_token(base_url, token)
     if not tok:
-        click.secho("No token found. Run: cashout auth login", fg="red", err=True)
+        click.secho("No token found. Run: jira auth login", fg="red", err=True)
         raise SystemExit(1)
 
     ok, payload = validate_token(base_url, tok)

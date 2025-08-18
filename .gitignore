@@ -42,9 +42,9 @@ htmlcov/
 # OS-specific
 Thumbs.db
 
-# Cashout config
+# jira config
 config.json
-cashout.json
+jira.json
 *.sqlite
 
 # Keyring test files

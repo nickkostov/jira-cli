@@ -1,6 +1,6 @@
 Quick wins (1–2 files, minimal API wrangling)
 
-Git branch flow: cashout feat "summary" → create issue → git checkout -b feat/PP-123-summary.
+Git branch flow: jira feat "summary" → create issue → git checkout -b feat/PP-123-summary.
 
 ~~CSV export: ticket list -p PP --csv > issues.csv for reporting.~~
 
@@ -34,11 +34,11 @@ Sort: --sort "updated DESC" (JQL ORDER BY passthrough).
 Pagination: --page 2 --page-size 50.
 
 Config & UX
-Profiles: cashout config profile add work ... then --profile work.
+Profiles: jira config profile add work ... then --profile work.
 
-Repo defaults: read .cashout.json in the repo (project, labels, branch prefix).
+Repo defaults: read .jira.json in the repo (project, labels, branch prefix).
 
-Shell completion: cashout --install-completion for zsh/bash.
+Shell completion: jira --install-completion for zsh/bash.
 
 Better errors: parse Jira error bodies and surface friendly messages.
 
@@ -49,4 +49,4 @@ SLA/age view: ticket list --age (shows days since created/updated, colorize > N 
 
 Notifications: ticket remind PP-123 --when "tomorrow 9am" (local reminder hook).
 
-PR helper (if you use Bitbucket/GitHub): cashout pr --from current-branch --title "[PP-123] ...", link back to Jira.
+PR helper (if you use Bitbucket/GitHub): jira pr --from current-branch --title "[PP-123] ...", link back to Jira.

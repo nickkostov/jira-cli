@@ -1,4 +1,4 @@
-# src/cashout/open.py
+# src/jira/open.py
 from __future__ import annotations
 
 import webbrowser
@@ -40,14 +40,14 @@ def open_issue(
     """
     base_url = base_url_override or get_base_url()
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     url = make_issue_url(base_url, issue_key)
 
     if validate:
         token = get_token(base_url, token_override)
         if not token:
-            raise RuntimeError("No token available to validate the issue. Use --no-validate or run: cashout auth login")
+            raise RuntimeError("No token available to validate the issue. Use --no-validate or run: jira auth login")
         # Will raise if invalid
         _validate_issue_exists(base_url, token, issue_key)
 

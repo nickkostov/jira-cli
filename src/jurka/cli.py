@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/cashout/cli.py
+# src/jira/cli.py
 from __future__ import annotations
 from .issue import transition_issue, get_transitions
 from datetime import datetime
@@ -27,7 +27,7 @@ from .open import open_issue
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli():
-    """cashout CLI — Jira (Bearer token) utilities."""
+    """jira CLI — Jira (Bearer token) utilities."""
     pass
 
 
@@ -497,7 +497,7 @@ def ticket_assign(issue_key, me, email, user, account_id, first, base_url, token
     if me:
         base_url_f = base_url or get_base_url()
         if not base_url_f:
-            click.secho("No base URL configured. Run: cashout auth login", fg="red", err=True)
+            click.secho("No base URL configured. Run: jira auth login", fg="red", err=True)
             raise SystemExit(1)
 
         try:
@@ -507,7 +507,7 @@ def ticket_assign(issue_key, me, email, user, account_id, first, base_url, token
             raise SystemExit(1)
 
         if not token_f:
-            click.secho("No token available. Run: cashout auth login", fg="red", err=True)
+            click.secho("No token available. Run: jira auth login", fg="red", err=True)
             raise SystemExit(1)
 
         try:
@@ -578,7 +578,7 @@ def ticket_attach(issue_key, files, base_url, token):
     Attach one or more files to ISSUE-KEY.
 
     Example:
-      cashout ticket attach PP-123 ./file.log ./screenshot.png
+      jira ticket attach PP-123 ./file.log ./screenshot.png
     """
     # de-dup & normalize
     paths = [os.path.expanduser(p) for p in files]

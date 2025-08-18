@@ -1,4 +1,4 @@
-# cashout — Jira (Bearer) CLI
+# jira — Jira (Bearer) CLI
 
 Create Jira tickets, add comments, and list issues from your terminal using a **Bearer token**.  
 No git actions yet (that can be added later).
@@ -8,13 +8,13 @@ No git actions yet (that can be added later).
 ## Features (current)
 
 - **Auth**
-  - `cashout auth login` — store **base URL** and **Bearer token** (token saved to OS keychain via `keyring`)
-  - `cashout auth whoami` — verify token against `/rest/api/2/myself`
-  - `cashout auth logout` — clear stored token for the current base URL
+  - `jira auth login` — store **base URL** and **Bearer token** (token saved to OS keychain via `keyring`)
+  - `jira auth whoami` — verify token against `/rest/api/2/myself`
+  - `jira auth logout` — clear stored token for the current base URL
 - **Tickets**
-  - `cashout ticket create` — create an issue (`Task`, `Bug`, `Story`, `Spike`)
-  - `cashout ticket comment` — add a comment to an issue (inline or via `$EDITOR`)
-  - `cashout ticket list` — list issues (open by default), with filters and JSON output
+  - `jira ticket create` — create an issue (`Task`, `Bug`, `Story`, `Spike`)
+  - `jira ticket comment` — add a comment to an issue (inline or via `$EDITOR`)
+  - `jira ticket list` — list issues (open by default), with filters and JSON output
 
 ---
 
@@ -38,37 +38,37 @@ Dependencies you may want:
 
 1) **Login**
 
-    cashout auth login
+    jira auth login
     # Base URL: https://jira.yourdomain.com
     # Token: **** (paste your PAT / Bearer token)
 
 This stores:
-- **Base URL** in: `~/.config/cashout/config.json` (or `$XDG_CONFIG_HOME/cashout/config.json`)
-- **Token** in your **OS keychain** under service `cashout-bearer` (if `keyring` is installed)
+- **Base URL** in: `~/.config/jira/config.json` (or `$XDG_CONFIG_HOME/jira/config.json`)
+- **Token** in your **OS keychain** under service `jira-bearer` (if `keyring` is installed)
 
 2) **Create a ticket**
 
-    cashout ticket create
+    jira ticket create
     # prompts for: Project, Summary
     # optional flags: --type, --desc, --label, --priority
 
 3) **Comment on a ticket**
 
-    cashout ticket comment PP-123 -b "Deployed to staging."
+    jira ticket comment PP-123 -b "Deployed to staging."
     # or open $EDITOR for multi-line:
-    cashout ticket comment PP-123
+    jira ticket comment PP-123
 
 4) **List open tickets in a project**
 
-    cashout ticket list -p PP
+    jira ticket list -p PP
     # mine only:
-    cashout ticket list -p PP --mine
+    jira ticket list -p PP --mine
     # include Done/Closed:
-    cashout ticket list -p PP --all
+    jira ticket list -p PP --all
     # with extra JQL:
-    cashout ticket list -p PP --jql 'labels = pp-transaction-consumer'
+    jira ticket list -p PP --jql 'labels = pp-transaction-consumer'
     # JSON output:
-    cashout ticket list -p PP -n 20 --json
+    jira ticket list -p PP -n 20 --json
 
 ---
 
@@ -76,18 +76,18 @@ This stores:
 
 ### Auth
 
-    cashout auth login
+    jira auth login
         # prompts for base URL & token and validates them
 
-    cashout auth whoami
+    jira auth whoami
         # shows current base URL and validates token via /rest/api/2/myself
 
-    cashout auth logout
+    jira auth logout
         # clears saved token for the current base URL
 
 ### Tickets
 
-    cashout ticket create
+    jira ticket create
         -p, --project       Project key (prompted if omitted)
         -t, --type          Task | Bug | Story | Spike  (default: Task)
         -s, --summary       Issue title (prompted if omitted)
@@ -98,49 +98,49 @@ This stores:
         --token             Override stored Bearer token
         --json              Print raw JSON response
 
-    cashout ticket comment ISSUE-KEY
+    jira ticket comment ISSUE-KEY
         -b, --body          Comment text (or omit to open $EDITOR)
         --base-url          Override saved base URL
         --token             Override stored Bearer token
 
-    cashout ticket list
+    jira ticket list
         -p, --project       Project key (prompted if omitted)
         --all               Include Done/
 
 
 # Assign by email (auto-resolves to accountId or username)
-cashout ticket assign PP-123 --email svetoslav.nenov@weareplanet.com
+jira ticket assign PP-123 --email svetoslav.nenov@weareplanet.com
 
 # If multiple matches, pick the first automatically
-cashout ticket assign PP-123 --email "svetoslav" --first
+jira ticket assign PP-123 --email "svetoslav" --first
 
 # Explicit (still supported)
-cashout ticket assign PP-123 --account-id 557058:abcd-1234-...
-cashout ticket assign PP-123 --user svetoslav.nenov
+jira ticket assign PP-123 --account-id 557058:abcd-1234-...
+jira ticket assign PP-123 --user svetoslav.nenov
 
 # Assign by account ID (Cloud/DC, most reliable)
-cashout ticket assign PP-123 --account-id 557058:abcd-1234-5678-...
+jira ticket assign PP-123 --account-id 557058:abcd-1234-5678-...
 
 # Assign by username (Server/DC)
-cashout ticket assign PP-123 --user svetoslav.nenov
+jira ticket assign PP-123 --user svetoslav.nenov
 
 # Assign by email (auto-resolves to accountId or username)
-cashout ticket assign PP-123 --email svetoslav.nenov@weareplanet.com
+jira ticket assign PP-123 --email svetoslav.nenov@weareplanet.com
 
 # Assign by email when multiple matches exist
-cashout ticket assign PP-123 --email "svetoslav" --first
+jira ticket assign PP-123 --email "svetoslav" --first
 
 # Open an issue in your default browser
-cashout ticket open PP-123
+jira ticket open PP-123
 
 # Just print the URL (don’t open)
-cashout ticket open PP-123 --print-only
+jira ticket open PP-123 --print-only
 
 # Skip server validation (faster, works without token)
-cashout ticket open PP-123 --no-validate
+jira ticket open PP-123 --no-validate
 
 # Force a specific browser (falls back to default if missing)
-cashout ticket open PP-123 --browser chrome
+jira ticket open PP-123 --browser chrome
 
 # Using a different base URL or token just for this call
-cashout ticket open PP-123 --base-url https://jira.weareplanet.com --token "$JIRA_BEARER_TOKEN"
+jira ticket open PP-123 --base-url https://jira.weareplanet.com --token "$JIRA_BEARER_TOKEN"

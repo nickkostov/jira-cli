@@ -1,4 +1,4 @@
-# src/cashout/issue.py
+# src/jira/issue.py
 from __future__ import annotations
 import json
 import requests # type: ignore
@@ -23,11 +23,11 @@ def create_issue_simple(
     """
     base_url = (base_url_override or get_base_url())
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     url = f"{base_url.rstrip('/')}/rest/api/2/issue"
     fields: Dict[str, Any] = {
@@ -62,11 +62,11 @@ def add_comment(
     """
     base_url = (base_url_override or get_base_url())
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/comment"
     payload = {"body": comment_body}
@@ -98,11 +98,11 @@ def search_issues(
     """
     base_url = (base_url_override or get_base_url())
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     # Build JQL
     jql_parts: List[str] = [f'project = "{project_key}"']
@@ -162,11 +162,11 @@ def assign_issue(
     """
     base_url = (base_url_override or get_base_url())
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     if not account_id and not user:
         raise RuntimeError("Provide --account-id or --user to assign.")
@@ -203,11 +203,11 @@ def unassign_issue(
     """
     base_url = (base_url_override or get_base_url())
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/assignee"
     payload = {"name": None}  # works for Server/DC; Cloud also accepts {"accountId": None}
@@ -239,11 +239,11 @@ def find_user(
     """
     base_url = (base_url_override or get_base_url())
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     search_url = f"{base_url.rstrip('/')}/rest/api/2/user/search"
 
@@ -275,11 +275,11 @@ def find_user(
 def get_transitions(issue_key, base_url_override=None, token_override=None):
     base_url = base_url_override or get_base_url()
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/transitions"
     resp = requests.get(
@@ -293,11 +293,11 @@ def get_transitions(issue_key, base_url_override=None, token_override=None):
 def transition_issue(issue_key, transition_id, base_url_override=None, token_override=None):
     base_url = base_url_override or get_base_url()
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/transitions"
     payload = {"transition": {"id": transition_id}}
@@ -328,11 +328,11 @@ def attach_files(
     """
     base_url = (base_url_override or get_base_url())
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}/attachments"
 
@@ -386,11 +386,11 @@ def get_issue(
     """
     base_url = base_url_override or get_base_url()
     if not base_url:
-        raise RuntimeError("No base URL configured. Run: cashout auth login")
+        raise RuntimeError("No base URL configured. Run: jira auth login")
 
     token = get_token(base_url, token_override)
     if not token:
-        raise RuntimeError("No token available. Run: cashout auth login")
+        raise RuntimeError("No token available. Run: jira auth login")
 
     url = f"{base_url.rstrip('/')}/rest/api/2/issue/{issue_key}"
     params = {}
