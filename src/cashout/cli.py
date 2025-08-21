@@ -7,8 +7,8 @@ from datetime import datetime
 import re
 import os
 import json
-import click
-import requests
+import click # type: ignore
+import requests # type: ignore
 
 from .auth import auth as auth_group, get_base_url, get_token
 from .issue import (

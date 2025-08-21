@@ -15,9 +15,9 @@ Useful day‑to‑day ops
 
 Watch/Unwatch: ticket watch PP-123, ticket unwatch PP-123.
 
-Attachments: ticket attach PP-123 ./file.log (multipart upload).
+~~Attachments: ticket attach PP-123 ./file.log (multipart upload).~~
 
-Show details: ticket show PP-123 with key fields + last comments.
+~~Show details: ticket show PP-123 with key fields + last comments.~~
 
 Creation power‑ups
 Templates: ticket create --template bug.yaml (pre-fill fields/labels/priority).
